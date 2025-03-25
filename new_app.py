@@ -2,19 +2,32 @@ import streamlit as st
 import google.generativeai as genai
 from datetime import datetime
 
-# Configure Google Gemini AI
-API_KEY = "AIzaSyCOHxWJjmdGhxEN64gDepDxuLBDenWDXNA"
-genai.configure(api_key=API_KEY)
 
-# Initialize Gemini model
+# Function to get summary using Google Gemini API
 def get_summary_from_gemini(text, mode, length_factor):
     try:
         model = genai.GenerativeModel("gemini-1.5-pro-latest")
-        prompt = f"Summarize the following text in a {mode.lower()} manner with about {int(length_factor * 100)}% of the original content:\n\n{text}"
+        prompt = (
+            f"Summarize the following text in a {mode.lower()} manner. "
+            f"The summary should be approximately {int(length_factor * 100)}% of the original content.\n\n{text}"
+        )
+
         response = model.generate_content(prompt)
-        return response.text.strip() if hasattr(response, "text") else "⚠️ No summary generated."
-    except Exception as e:
+
+        # Properly extract text from API response
+        if hasattr(response, "text") and response.text.strip():
+            return response.text.strip()
+        elif hasattr(response, "candidates") and response.candidates:
+            return response.candidates[0].text.strip() if response.candidates[0].text else "⚠️ No summary generated."
+        elif hasattr(response, "parts") and response.parts:
+            return response.parts[0].text.strip() if response.parts[0].text else "⚠️ No summary generated."
+        else:
+            return "⚠️ No valid summary received from the API."
+
+    except genai.GenerativeAIError as e:
         return f"⚠️ Gemini API Error: {str(e)}"
+    except Exception as e:
+        return f"⚠️ Unexpected Error: {str(e)}"
 
 # Initialize session state
 def init_session_state():
@@ -27,7 +40,6 @@ def init_session_state():
 
 init_session_state()
 
-# Custom CSS for Small Dark Header
 custom_css = """
     <style>
     /* Hide Default Streamlit Header & Footer */
@@ -40,47 +52,113 @@ custom_css = """
         color: black; 
     }
 
-    /* Small Dark Header */
+    /* Small Dark Header - Responsive */
     .custom-header {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         background: #262730;
-        padding: 10px 0;
-        text-align: center;
+        padding: 10px 20px;
         box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
         z-index: 100;
-    }
-    .custom-header h1 {
-        color: white;
-        font-size: 22px;
-        font-weight: bold;
-        margin: 0;
+        transition: all 0.3s ease-in-out;
     }
 
+    /* Texeer Title Default Position */
+   /* Default position when sidebar is closed */
+.custom-header h1 {
+    color: white;
+    font-size: 22px;
+    font-weight: bold;
+    margin: 0;
+    margin-left: 50px; /* Start a bit to the right */
+    transition: margin-right 0.3s ease-in-out;
+}
+
+/* Adjust position when sidebar is open */
+[data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="stHeader"] .custom-header h1 {
+    margin-right: 300px; /* Align with sidebar edge when opened */
+}
     /* Light Mode Input & Buttons */
-    .stTextArea textarea, .stButton button {
-        background-color: #f0f0f0;
-        color: black;
+    .stTextArea textarea {
+        background-color: #ffffff;  /* White background */
+        color: black;               /* Text color */
+        border: 2px solid #ccc;     /* Slightly dark border */
+        padding: 10px;
+        font-size: 16px;
+        font-family: Arial, sans-serif; /* Professional Font */
     }
-    .stSlider > div > div, .stRadio div label { color: black !important; }
-    
+       
+    .stButton button {
+    background-color: white !important;  /* Set button background to white */
+    color: black !important;  /* Keep text black */
+    border: 1px solid #ccc;  /* Light border for a clean look */
+    padding: 8px 12px;  /* Adjust padding for better spacing */
+    border-radius: 5px;  /* Slightly rounded edges */
+    box-shadow: none;  /* Remove any default shadows */
+}
+
+.stButton button:hover {
+    background-color: #f0f0f0;  /* Light gray hover effect */
+    color: black;
+}
+
+.stTextArea textarea {
+    background-color: white !important;  /* Remove unwanted background */
+    color: black !important;
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 5px;
+}
+
+    /* Professional Placeholder */
+    .stTextArea textarea::placeholder {
+        color: #666;  /* Darker gray for better visibility */
+        font-style: normal;
+        font-weight: 500;
+        font-size: 15px;
+        font-family: Arial, sans-serif; /* Sleek Font */
+    }
+
+    /* Blinking Cursor Effect */
+    @keyframes blink {
+        50% { opacity: 0; }
+    }
+
+    .stTextArea textarea::before {
+        content: "|";
+        font-size: 18px;
+        color: black;
+        font-weight: bold;
+        display: inline-block;
+        animation: blink 1s infinite;
+    }
+
     /* Light Sidebar Theme */
     .stSidebar, .stSidebar div {
         background-color: #f8f9fa !important;
         color: black !important;
     }
+
+    /* 🚀 Move Container Upward */
+    .block-container { 
+        padding-top: 10px !important;  /* Decreased from 60px */
+        margin-top: -40px !important;  /* Move up more */
+    }
     </style>
 """
 
-st.set_page_config(page_title="Texeer - AI Summarizer", layout="wide")
+st.set_page_config(page_title="Texeer - AI Summarizer", layout="wide", initial_sidebar_state="collapsed")
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# Custom Small Header
+# Custom Responsive Header
 st.markdown(
     """
     <div class="custom-header">
+        <h1>Texeer - AI Summarizer</h1>
+    </div>
+    <div class="custom-header h1">
         <h1>Texeer - AI Summarizer</h1>
     </div>
     """,
@@ -133,45 +211,19 @@ uploaded_file = st.file_uploader("Upload a file (TXT only)", type=["txt"])
 if uploaded_file is not None:
     text = uploaded_file.read().decode("utf-8")
 
-# Summarize Button
 if st.button("Summarize"):
     if text.strip():
         with st.spinner("Generating summary..."):
             summary = get_summary_from_gemini(text, st.session_state.summary_mode, st.session_state.length_factor)
             
             if summary.startswith("⚠️"):
-                st.markdown(
-                    """
-                    <div style="color: red; font-weight: bold;">
-                        ❌ Error: Unable to generate summary. Please try again!
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
+                st.error("❌ Error: Unable to generate summary. Please try again!")
             else:
-                st.markdown(
-                    """
-                    <div style="color: green; font-weight: bold;">
-                        ✅ Summary Generated Successfully!
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
+                st.success("✅ Summary Generated Successfully!")
 
                 # Display summary
                 st.markdown("### Summary:")
                 st.markdown(summary)
-
-                # Display Word Count
-                word_count = len(summary.split())
-                st.markdown(
-                    f"""
-                    <div style="font-weight: bold;">
-                        📌 Word Count: {word_count}
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
 
                 # Save to history
                 st.session_state.history.append({
@@ -179,6 +231,20 @@ if st.button("Summarize"):
                     "summary": summary,
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 })
+
+                # **Auto-scroll to summary (Ensures the page moves to the bottom)**
+                st.markdown(
+                    """
+                    <script>
+                        function scrollToBottom() {
+                            var scrollHeight = document.documentElement.scrollHeight;
+                            window.scrollTo({ top: scrollHeight, behavior: 'smooth' });
+                        }
+                        setTimeout(scrollToBottom, 500);
+                    </script>
+                    """,
+                    unsafe_allow_html=True
+                )
     else:
         st.markdown(
             """
