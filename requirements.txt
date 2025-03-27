@@ -1,2 +1,7 @@
 streamlit
-summa
+google.generativeai 
+datetime 
+PyPDF2
+pptx
+time 
+io
