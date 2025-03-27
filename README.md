@@ -1,4 +1,5 @@
 #Texer-Advanced-Summarize
+
 Texer is an AI-powered text summarization tool that transforms lengthy content into precise, structured summaries in seconds. It supports text, PDFs, PowerPoint files, and even speech input—giving users maximum flexibility.!
 Multi-Input: Text, PDFs, PPTs, Speech
 AI-Powered: Google Gemini AI for precision
